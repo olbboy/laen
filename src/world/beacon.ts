@@ -1,5 +1,4 @@
 import * as THREE from 'three'
-import { SUMMIT_POS } from '../game/constants'
 import { pillarTexture, radialTexture } from './textures'
 
 /** The central column of light the whole spiral winds around. */
@@ -11,7 +10,7 @@ export class Beacon {
   private halo: THREE.Sprite
   private ignited = false
 
-  constructor() {
+  constructor(SUMMIT_POS: THREE.Vector3) {
     const pillarMat = new THREE.MeshBasicMaterial({
       map: pillarTexture('rgba(255,236,200,0.5)'),
       color: 0xffe9c4,

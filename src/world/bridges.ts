@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { islandPosition, islandRadius, zoneOfStep } from '../game/constants'
+import type { CourseRuntime } from '../game/runtime'
 
 export interface Bridge {
   group: THREE.Group
@@ -17,21 +17,21 @@ const UP = new THREE.Vector3(0, 1, 0)
  * A curved ribbon bridge from island `i` to island `i+1`, with glowing
  * rails. Locked bridges render as faint ghosts and are not walkable.
  */
-export function buildBridge(i: number): Bridge {
-  const from = islandPosition(i)
-  const to = islandPosition(i + 1)
-  const zone = zoneOfStep(Math.min(i + 1, 11))
+export function buildBridge(i: number, rt: CourseRuntime): Bridge {
+  const from = rt.islandPosition(i)
+  const to = rt.islandPosition(i + 1)
+  const zone = rt.zoneOfStep(Math.min(i + 1, rt.stepCount))
 
   // path: leave the rim of island i, arc outward, land on rim of i+1
   const dir = to.clone().sub(from)
   dir.y = 0
   dir.normalize()
-  const start = from.clone().addScaledVector(dir, islandRadius(i) - 0.6)
+  const start = from.clone().addScaledVector(dir, rt.islandRadius(i) - 0.6)
   start.y = from.y
   const backDir = from.clone().sub(to)
   backDir.y = 0
   backDir.normalize()
-  const end = to.clone().addScaledVector(backDir, islandRadius(i + 1) - 0.6)
+  const end = to.clone().addScaledVector(backDir, rt.islandRadius(i + 1) - 0.6)
   end.y = to.y
 
   const mid1 = start.clone().lerp(end, 0.33)

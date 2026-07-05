@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import { islandPosition, islandRadius, ISLAND_COUNT, mulberry32 } from '../game/constants'
+import { mulberry32 } from '../game/constants'
+import type { CourseRuntime } from '../game/runtime'
 import { radialTexture } from './textures'
 import type { Bridge } from './bridges'
 
@@ -22,7 +23,7 @@ export class Sparks {
   private sparks: Spark[] = []
   total = 0
 
-  constructor(bridges: Bridge[], isCollected: (id: string) => boolean) {
+  constructor(bridges: Bridge[], isCollected: (id: string) => boolean, rt: CourseRuntime) {
     const geo = new THREE.OctahedronGeometry(0.22, 0)
     const mat = new THREE.MeshStandardMaterial({
       color: 0xffd66b,
@@ -57,10 +58,10 @@ export class Sparks {
     })
 
     // a few on each island
-    for (let i = 0; i < ISLAND_COUNT; i++) {
+    for (let i = 0; i < rt.islandCount; i++) {
       const rnd = mulberry32(500 + i * 31)
-      const c = islandPosition(i)
-      const r = islandRadius(i)
+      const c = rt.islandPosition(i)
+      const r = rt.islandRadius(i)
       for (let k = 0; k < 2; k++) {
         const a = rnd() * Math.PI * 2
         const d = r * (0.45 + rnd() * 0.35)

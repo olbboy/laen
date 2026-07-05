@@ -1,60 +1,65 @@
-# NEXT STEP — The AI Mastery Ascent
+# NEXT STEP — 3D Learning Worlds
 
-An interactive **3D learning game**: pilot a little hover-robot up a spiral of
-floating islands and climb the AI mastery ladder — eleven steps, from *chatting
-with AI* to *systems that work while you sleep*.
+An interactive **3D learning platform**: pilot a hover-robot up spirals of
+floating islands, where every island is one lesson and every completed
+challenge physically opens the path forward.
 
-The learning path is inspired by the infographic
-[“Your Next Step in AI”](https://charliehills.substack.com) — the game turns its
-eleven rungs (Codex, Memory, Cowork, Projects, Skills, Connectors, Claude Code,
-CLAUDE.md, Sub-agents, Agent Team, Routines) into an explorable world where every
-step is a place, a lesson, and a hands-on challenge.
+It ships with **three worlds** (courses), each with its own map, theme,
+atmosphere and learning path — and adding a new world is a single data file.
+
+| World | Path | Theme |
+| --- | --- | --- |
+| 🤖 **The AI Mastery Ascent** (11 steps) | the “Your Next Step in AI” ladder: coding agents → memory → projects → skills → connectors → Claude Code → CLAUDE.md → sub-agents → agent teams → routines | morning blue → violet dusk |
+| 🥋 **Prompt Craft Dojo** (8 steps) | the art of asking: specificity, context, few-shot examples, structure, output contracts, thinking room, iteration, diagnosis | sakura dawn → ink-wash night |
+| 🧭 **The Safety Lighthouse** (6 steps) | AI's sharp edges: hallucinations, verification, secrets, over-trust, framing bias, the safety ritual | sea fog → beacon night |
 
 ![Intro screen](docs/screen-intro.png)
 ![The world](docs/screen-world.png)
+![Prompt Craft Dojo at night](docs/screen-dojo-night.png)
+![Choose your world](docs/screen-worlds.png)
 
 ## How it plays
 
-- **A rising spiral of 12 floating islands** around a central beacon of light.
-  Each island hosts one learning station; the sky shifts from fresh morning blue
-  through golden hour to a starry violet dusk as you ascend the four levels
-  (*Get Going → Power Up → Go Pro → Automate*) — the same color bands as the
-  original ladder.
+- **A rising spiral of floating islands** per world, wound around a central
+  beacon. Each island hosts one learning station; sky, fog, terrain and
+  decorations blend across the course's themed zones as you ascend.
 - **Learn by doing.** Each station opens a compact lesson (hook → concept →
   real example) followed by one of **five interactive challenge engines**:
-  - scenario quizzes with teaching feedback on every option,
-  - multi-select curation exercises (e.g. *what belongs in Memory / CLAUDE.md?*),
-  - pair-matching (connectors ↔ the jobs they unlock),
-  - pipeline sequencing (assemble an agent team in working order),
-  - a simulated terminal (actually type the slash command to run a skill).
+  scenario quizzes with teaching feedback, multi-select curation, pair
+  matching, pipeline sequencing, and a simulated terminal where you actually
+  type the command.
 - **Progress is physical.** Completing a step turns its crystal gold and
-  *materializes the bridge* to the next island. Collect sparks along the way,
-  guided by a light pillar and an edge-of-screen compass.
-- **The journal ("field notes")** collects every lesson you finish together with
-  its *“try it today”* action — so the game ends with a practical checklist,
-  not just a score.
-- **Summit ceremony** with a recap of all eleven capabilities once the final
-  step is done.
+  *materializes the bridge* to the next island.
+- **Meta-progression across worlds**: XP for steps (with a perfect-run
+  bonus), sparks and course completions; five ranks from Explorer to
+  Automator; progress persists per course.
+- **Shareable certificate**: finishing a world generates a themed,
+  personalized PNG certificate (canvas-drawn, social-card ratio) plus a
+  share/copy action — and a confetti summit ceremony.
+- **The journal (“field notes”)** collects every finished lesson with its
+  *“try it today”* action — the game ends with a practical checklist.
 - Fully **bilingual (English / Tiếng Việt)**, switchable at any time.
-- Desktop (WASD + mouse) and **touch** (virtual joystick + tap) controls.
-- Procedural ambient music and synthesized SFX (WebAudio — zero audio assets).
-- Progress persists in `localStorage`.
+- Desktop (WASD + mouse) and **touch** (virtual joystick + tap) controls,
+  procedural ambient music per zone, quality toggle, `localStorage` saves
+  (with automatic v1 → v2 migration).
 
 ![A lesson card](docs/screen-lesson.png)
-![Dusk at the top of the ladder](docs/screen-dusk.png)
+![Certificate](docs/screen-certificate.png)
 
 ## Run it
 
 ```bash
 npm install
-npm run dev        # local dev server
-npm run build      # type-check + production build → dist/
+npm run dev           # local dev server
+npm run build         # type-check + production build → dist/
 npm run build:single  # single self-contained HTML file → dist-single/index.html
-npm run preview    # serve the production build
+npm run preview       # serve the production build
 ```
 
-Requires Node 20+. No API keys, no external assets — everything (geometry,
-textures, audio) is generated procedurally at runtime.
+Deep links: `?course=prompt-dojo`, `?course=safety-lighthouse`.
+
+No API keys, no external assets — geometry, textures, audio and the
+certificate are all generated procedurally at runtime.
 
 ### Controls
 
@@ -67,66 +72,93 @@ textures, audio) is generated procedurally at runtime.
 | `E` / tap prompt | learn at a station |
 | `Esc` | close panels |
 
-## Technology choices (research summary)
+## Adding a new world (course)
 
-The brief was a high-quality browser 3D learning game with beautiful UI. Options
-evaluated:
+Everything — the 3D map, zone atmosphere, ladder HUD, journal, certificate —
+derives from one typed definition:
+
+1. Create `src/content/courses/my-course.ts` exporting a `Course`:
+
+```ts
+import type { Course } from '../types'
+
+export const MY_COURSE: Course = {
+  id: 'my-course',
+  icon: '🎓',
+  name: { en: 'My Course', vi: 'Khoá học của tôi' },
+  tagline: { en: '…', vi: '…' },
+  blurb: { en: '…', vi: '…' },
+  minutes: 20,
+  // named bands of steps → ladder colors + zone mapping
+  levels: [
+    { name: { en: 'Basics', vi: 'Cơ bản' }, color: '#3e8dcc', steps: [1, 2], zone: 0 },
+    { name: { en: 'Advanced', vi: 'Nâng cao' }, color: '#d95b3f', steps: [3, 4], zone: 1 },
+  ],
+  // atmosphere bands: sky, terrain tint, decoration flavor
+  zones: [
+    { skyTop: '#6fb3e8', skyBottom: '#f6ead6', grass: '#7ec578', rock: '#8d87a8',
+      accent: '#3e8dcc', sun: '#fff3e0', starAlpha: 0, flavor: 'trees' },
+    { skyTop: '#4c3d6e', skyBottom: '#ef8f6a', grass: '#8a76a6', rock: '#6b5f88',
+      accent: '#d95b3f', sun: '#ffc9a0', starAlpha: 1, flavor: 'lantern' },
+  ],
+  // spiral geometry of the island chain
+  layout: { spiralDeg: 62, radius: 30, rise: 6, islandRadius: 8, startRadius: 10 },
+  lessons: [ /* one Lesson per step — see content/types.ts */ ],
+}
+```
+
+2. Register it in `src/content/courses/index.ts`.
+
+That's it: the world builds itself (one island per lesson), bridges gate the
+path, the HUD ladder adopts your level colors, and the certificate uses your
+zone palette. Decoration flavors available: `trees`, `bushes`, `shards`,
+`sakura`, `bamboo`, `lantern`, `reeds` — new flavors are ~20 lines in
+`src/world/islands.ts`.
+
+Each lesson's exercise picks one of five challenge engines (`quiz`, `multi`,
+`match`, `order`, `terminal`) — pure data, bilingual by construction, with
+instant feedback and retry built in.
+
+## Technology choices (research summary)
 
 | Option | Verdict |
 | --- | --- |
-| **Three.js + TypeScript + Vite** ✅ | Chosen. Small (≈177 kB gz), total control over look and performance, first-class post-processing (UnrealBloom), mature and stable. Ideal for a fully procedural art style — no asset pipeline needed. |
-| React Three Fiber + drei | Great DX, but adds React overhead and indirection for a game that needs one imperative main loop; no UI framework is needed here (lesson UI is hand-rolled DOM, which stays crisper than in-canvas text). |
-| Babylon.js | Full engine with more built-ins (physics, GUI), but heavier bundle and a look that is harder to art-direct toward this soft low-poly aesthetic. |
-| Unity / Godot Web export | 20–60 MB payloads, slow cold loads, poor DOM/UI integration — wrong tool for an instant-on learning game. |
-| PlayCanvas | Editor-centric, cloud workflow; less suited to a code-first, reviewable repository. |
-| WebGPU / TSL | Promising, but WebGL2 still has far broader reach in 2026; nothing here needs compute shaders. |
+| **Three.js + TypeScript + Vite** ✅ | Chosen. ~198 kB gz total, full art direction control, first-class post-processing, ideal for fully procedural art. |
+| React Three Fiber + drei | Great DX, but adds React overhead for a game with one imperative main loop; lesson UI is hand-rolled DOM. |
+| Babylon.js | Heavier bundle; harder to art-direct toward this soft low-poly look. |
+| Unity / Godot Web export | 20–60 MB payloads, slow cold loads — wrong tool for instant-on learning. |
+| PlayCanvas | Editor-centric cloud workflow; less suited to a code-first repo. |
+| WebGPU / TSL | Promising, WebGL2 still has broader reach; nothing here needs compute. |
 
-Other deliberate calls:
-
-- **Procedural everything** (islands, robot, textures, music): zero downloads,
-  works offline, no licensing, and the whole game fits in one HTML file via
-  `vite-plugin-singlefile`.
-- **DOM for learning content**: text-heavy lessons render as accessible,
-  selectable, responsive HTML on top of the canvas instead of 3D text.
-- **Deterministic world** (seeded PRNG) so the world looks identical across
-  sessions and screenshots.
-- **Quality toggle** (bloom + soft shadows + high DPR ↔ lightweight mode) with
-  device-based auto-detection for mobile.
+Deliberate calls: procedural everything (zero downloads, single-file build via
+`vite-plugin-singlefile`), DOM for text-heavy learning content, deterministic
+worlds (seeded PRNG), device-aware quality auto-detection.
 
 ## Architecture
 
 ```
 src/
-  main.ts            game orchestration: loop, progression, cinematics, debug API
-  core/              engine (renderer+composer), input (kbd/mouse/touch), audio, save
-  game/              constants (layout, palettes, levels), state (progress + events)
-  content/           lessons.ts (11 bilingual lessons + challenges), i18n.ts (UI strings)
-  world/             sky, islands, bridges, stations, beacon, sparks, particles, textures
-  player/            robot (procedural mascot), controller (physics), chase camera
-  ui/                hud (chips/ladder/prompts), lesson modal, challenge engines, screens
-  styles/main.css    the whole design system (infographic-inspired)
+  main.ts               orchestration: course resolution, loop, progression, cinematics
+  core/                 engine (renderer+bloom), input (kbd/mouse/touch), audio, save (v2 + migration)
+  game/                 constants (lang, PRNG), runtime (course → layout/zones), state (progress, XP, ranks)
+  content/
+    types.ts            Course / Lesson / Challenge / Rank definitions
+    courses/            ai-ladder.ts · prompt-dojo.ts · safety-lighthouse.ts · index.ts (registry)
+    i18n.ts             UI strings (EN/VI)
+  world/                sky, islands (7 decoration flavors), bridges, stations, beacon, sparks, particles
+  player/               robot (procedural mascot), controller (physics), chase camera
+  ui/                   hud, lesson modal, challenge engines, screens (worlds hub, journal, settings,
+                        completion), certificate (canvas PNG generator)
+  styles/main.css       the design system
 ```
 
-Notable mechanics under the hood:
-
-- **Edge-guarded walking**: raycast ground snapping that refuses to walk off a
-  cliff (but lets you jump off — the wind catches you and returns you to the
-  last safe spot).
-- **Gated traversal**: locked bridges are ghost-transparent and excluded from
-  the walkable set; completing a step animates them solid and walkable.
-- **Altitude-blended atmosphere**: sky shader, fog, hemisphere light, star
-  opacity and terrain tint all interpolate across four zone palettes by height.
-- **Data-driven challenges**: each lesson declares one of five challenge specs;
-  the engines are reusable and bilingual by construction.
-
-## Testing
-
-`window.__game` exposes a small debug API (`teleport`, `openLesson`,
-`completeStep`, `skipIntro`) used by the Playwright end-to-end script that
-drives the real game: start → move → station → lesson → challenge → step
-completion → bridge unlock → summit → language switch.
+Notable mechanics: edge-guarded walking with wind-catch respawn, gated
+traversal (ghost bridges), altitude-blended atmosphere over N zones,
+data-driven challenges, and a `window.__game` debug API driving the
+Playwright end-to-end suite (course switching, save migration, certificate
+download, all three worlds).
 
 ---
 
-*Learning path inspired by “Your Next Step in AI” (charliehills.substack.com).
-Built with Three.js.*
+*AI-ladder learning path inspired by “Your Next Step in AI”
+(charliehills.substack.com). Built with Three.js.*

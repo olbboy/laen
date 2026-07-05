@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { ISLAND_COUNT, STEP_COUNT, zoneBlendAt } from '../game/constants'
+import type { CourseRuntime } from '../game/runtime'
 import { buildIsland, type Island } from './islands'
 import { buildBridge, type Bridge } from './bridges'
 import { Station } from './stations'
@@ -10,7 +10,8 @@ import { Sky } from './sky'
 
 /**
  * Owns everything in the 3D scene except the player: terrain, bridges,
- * stations, lights, sky, pickups and ambient life.
+ * stations, lights, sky, pickups and ambient life. Fully derived from
+ * the loaded course's runtime.
  */
 export class World {
   readonly islands: Island[] = []
@@ -18,18 +19,24 @@ export class World {
   readonly stations: Station[] = []
   readonly sparks: Sparks
   readonly particles = new Particles()
-  readonly beacon = new Beacon()
+  readonly beacon: Beacon
   readonly walkables: THREE.Object3D[] = []
 
-  private sky = new Sky()
+  private sky: Sky
   private hemi: THREE.HemisphereLight
   private sun: THREE.DirectionalLight
   private dust: THREE.Points
   private scene: THREE.Scene
 
-  constructor(scene: THREE.Scene, isCompleted: (step: number) => boolean, isSparkCollected: (id: string) => boolean) {
+  constructor(
+    scene: THREE.Scene,
+    readonly rt: CourseRuntime,
+    isCompleted: (step: number) => boolean,
+    isSparkCollected: (id: string) => boolean,
+  ) {
     this.scene = scene
-    scene.fog = new THREE.Fog(0xf6ead6, 70, 260)
+    this.sky = new Sky(rt)
+    scene.fog = new THREE.Fog(rt.zones[0].skyBottom.clone(), 70, 260)
     scene.add(this.sky.group)
 
     this.hemi = new THREE.HemisphereLight(0xcfe8ff, 0xe8d2b0, 0.9)
@@ -49,16 +56,16 @@ export class World {
     scene.add(this.sun.target)
 
     // islands
-    for (let i = 0; i < ISLAND_COUNT; i++) {
-      const island = buildIsland(i)
+    for (let i = 0; i < rt.islandCount; i++) {
+      const island = buildIsland(i, rt)
       this.islands.push(island)
       this.walkables.push(island.walkable)
       scene.add(island.group)
     }
 
     // bridges: island i → i+1; bridge 0 is open from the start
-    for (let i = 0; i < ISLAND_COUNT - 1; i++) {
-      const bridge = buildBridge(i)
+    for (let i = 0; i < rt.islandCount - 1; i++) {
+      const bridge = buildBridge(i, rt)
       this.bridges.push(bridge)
       scene.add(bridge.group)
       const open = i === 0 || isCompleted(i)
@@ -66,17 +73,18 @@ export class World {
       if (open) this.walkables.push(bridge.deck)
     }
 
-    // stations on islands 1..11
-    for (let s = 1; s <= STEP_COUNT; s++) {
-      const station = new Station(s)
+    // stations on islands 1..n
+    for (let s = 1; s <= rt.stepCount; s++) {
+      const station = new Station(s, rt)
       this.stations.push(station)
       scene.add(station.group)
     }
 
+    this.beacon = new Beacon(rt.summitPos)
     scene.add(this.beacon.group)
     scene.add(this.particles.group)
 
-    this.sparks = new Sparks(this.bridges, isSparkCollected)
+    this.sparks = new Sparks(this.bridges, isSparkCollected, rt)
     scene.add(this.sparks.group)
 
     // ambient dust motes drifting around the camera
@@ -120,7 +128,7 @@ export class World {
     ;(this.scene.fog as THREE.Fog).color.copy(fog)
     this.sun.color.copy(sun)
 
-    const { a, b, t: zt } = zoneBlendAt(cameraPos.y)
+    const { a, b, t: zt } = this.rt.zoneBlendAt(cameraPos.y)
     this.hemi.color.copy(a.skyTop).lerp(b.skyTop, zt).lerp(new THREE.Color(0xffffff), 0.5)
     this.hemi.groundColor.copy(fog).multiplyScalar(0.9)
 

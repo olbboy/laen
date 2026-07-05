@@ -1,5 +1,4 @@
 import * as THREE from 'three'
-import { islandPosition } from '../game/constants'
 
 const GRAVITY = -22
 const JUMP_V = 8.2
@@ -13,18 +12,23 @@ const STEP_TOLERANCE = 1.1
  * and wind-catch respawn when you fall.
  */
 export class PlayerController {
-  readonly position = islandPosition(0).clone().add(new THREE.Vector3(0, 2, 0))
+  readonly position: THREE.Vector3
   readonly velocity = new THREE.Vector3()
   heading = 0
   grounded = false
   private vy = 0
-  private lastSafe = this.position.clone()
+  private lastSafe: THREE.Vector3
   private ray = new THREE.Raycaster()
   private down = new THREE.Vector3(0, -1, 0)
   private justJumped = false
   onFall?: () => void
   onJump?: () => void
   onLand?: () => void
+
+  constructor(spawn: THREE.Vector3) {
+    this.position = spawn.clone().add(new THREE.Vector3(0, 2, 0))
+    this.lastSafe = this.position.clone()
+  }
 
   private groundAt(x: number, z: number, fromY: number, walkables: THREE.Object3D[]): number | null {
     this.ray.set(new THREE.Vector3(x, fromY + 2.5, z), this.down)

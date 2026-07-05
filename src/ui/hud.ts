@@ -1,5 +1,6 @@
-import { LEVELS, levelOfStep, STEP_COUNT, tr, type Lang } from '../game/constants'
-import { lessonOf } from '../content/lessons'
+import { tr, type Lang } from '../game/constants'
+import type { Course } from '../content/types'
+import type { CourseRuntime } from '../game/runtime'
 import { el, esc } from './dom'
 
 export interface HudDeps {
@@ -7,6 +8,7 @@ export interface HudDeps {
   t: (key: string) => string
   isCompleted: (step: number) => boolean
   nextStep: () => number
+  onOpenWorlds: () => void
   onOpenJournal: () => void
   onOpenSettings: () => void
   onLadderClick: (step: number) => void
@@ -15,37 +17,44 @@ export interface HudDeps {
 
 /** All persistent on-screen chrome: chips, spark counter, ladder, prompts. */
 export class Hud {
-  private topLeft: HTMLElement
   private stepChip: HTMLElement
   private sparkCounter: HTMLElement
-  private ladder: HTMLElement
   private prompt: HTMLElement
   private promptLabel: HTMLElement
   private edgeArrow: HTMLElement
   private hintBar: HTMLElement
   private toasts: HTMLElement
-  private objective: HTMLElement
   private dots: HTMLElement[] = []
+  private course: Course
+  private rt: CourseRuntime
 
   constructor(
     root: HTMLElement,
+    rt: CourseRuntime,
     private deps: HudDeps,
   ) {
+    this.rt = rt
+    this.course = rt.course
     const hud = el('div', 'hud')
 
     /* top-left: brand + current step */
-    this.topLeft = el('div', 'hud-topleft')
-    this.topLeft.appendChild(el('div', 'hud-brand', 'NEXT<span>STEP</span>'))
+    const topLeft = el('div', 'hud-topleft')
+    topLeft.appendChild(el('div', 'hud-brand', 'NEXT<span>STEP</span>'))
+    const worldChip = el('button', 'hud-world-chip', `${this.course.icon} ${esc(tr(this.course.name, deps.lang()))}`)
+    worldChip.addEventListener('click', deps.onOpenWorlds)
+    topLeft.appendChild(worldChip)
     this.stepChip = el('div', 'hud-step-chip')
-    this.topLeft.appendChild(this.stepChip)
-    this.objective = el('div', 'hud-objective')
-    this.topLeft.appendChild(this.objective)
-    hud.appendChild(this.topLeft)
+    topLeft.appendChild(this.stepChip)
+    hud.appendChild(topLeft)
 
     /* top-right: sparks + menu buttons */
     const topRight = el('div', 'hud-topright')
     this.sparkCounter = el('div', 'hud-sparks', '<span class="spark-icon">✦</span><span class="spark-count">0</span>')
     topRight.appendChild(this.sparkCounter)
+    const worldsBtn = el('button', 'icon-btn', '🌍')
+    worldsBtn.setAttribute('aria-label', 'worlds')
+    worldsBtn.addEventListener('click', deps.onOpenWorlds)
+    topRight.appendChild(worldsBtn)
     const journalBtn = el('button', 'icon-btn', '📖')
     journalBtn.setAttribute('aria-label', 'journal')
     journalBtn.addEventListener('click', deps.onOpenJournal)
@@ -57,18 +66,18 @@ export class Hud {
     hud.appendChild(topRight)
 
     /* right-edge ladder */
-    this.ladder = el('div', 'hud-ladder')
-    for (let s = STEP_COUNT; s >= 1; s--) {
+    const ladder = el('div', 'hud-ladder')
+    for (let s = rt.stepCount; s >= 1; s--) {
       const dot = el('button', 'ladder-dot')
-      dot.style.setProperty('--dot-color', LEVELS[levelOfStep(s)].color)
+      dot.style.setProperty('--dot-color', rt.levelColorOfStep(s))
       dot.dataset.step = String(s)
       const tip = el('span', 'ladder-tip')
       dot.appendChild(tip)
       dot.addEventListener('click', () => this.deps.onLadderClick(s))
-      this.ladder.appendChild(dot)
+      ladder.appendChild(dot)
       this.dots[s] = dot
     }
-    hud.appendChild(this.ladder)
+    hud.appendChild(ladder)
 
     /* interact prompt (follows a station on screen) */
     this.prompt = el('div', 'interact-prompt')
@@ -102,21 +111,22 @@ export class Hud {
     const L = lang()
     const step = nextStep()
 
-    if (step > STEP_COUNT) {
+    const worldChip = document.querySelector('.hud-world-chip')
+    if (worldChip) worldChip.innerHTML = `${this.course.icon} ${esc(tr(this.course.name, L))}`
+
+    if (step > this.rt.stepCount) {
       this.stepChip.innerHTML = `<span class="chip chip-summit">★ ${esc(t('summitChip'))}</span>`
-      this.objective.textContent = ''
     } else {
-      const lesson = lessonOf(step)
-      const level = LEVELS[levelOfStep(step)]
+      const lesson = this.rt.lessonOf(step)
+      const color = this.rt.levelColorOfStep(step)
       this.stepChip.innerHTML = `
-        <span class="chip chip-level" style="--accent:${level.color}">${esc(t('step'))} ${String(step).padStart(2, '0')} <span class="chip-dim">${esc(t('stepOf'))}</span></span>
+        <span class="chip chip-level" style="--accent:${color}">${esc(t('step'))} ${String(step).padStart(2, '0')} <span class="chip-dim">/ ${this.rt.stepCount}</span></span>
         <span class="hud-step-name">${esc(tr(lesson.from, L))} <span class="route-arrow">⟶</span> <b>${esc(tr(lesson.to, L))}</b></span>`
-      this.objective.textContent = ''
     }
 
-    for (let s = 1; s <= STEP_COUNT; s++) {
+    for (let s = 1; s <= this.rt.stepCount; s++) {
       const dot = this.dots[s]
-      const lesson = lessonOf(s)
+      const lesson = this.rt.lessonOf(s)
       dot.classList.toggle('done', this.deps.isCompleted(s))
       dot.classList.toggle('current', s === step)
       const tip = dot.querySelector('.ladder-tip')!

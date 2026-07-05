@@ -1,5 +1,5 @@
-import { LEVELS, levelOfStep, tr, type Lang } from '../game/constants'
-import { lessonOf } from '../content/lessons'
+import { tr, type Lang } from '../game/constants'
+import type { CourseRuntime } from '../game/runtime'
 import { renderChallenge, type ChallengeCallbacks } from './challenges'
 import { el, esc } from './dom'
 
@@ -7,7 +7,7 @@ export interface LessonModalDeps {
   lang: () => Lang
   t: (key: string) => string
   isCompleted: (step: number) => boolean
-  onComplete: (step: number) => void
+  onComplete: (step: number, perfect: boolean) => void
   onClose: () => void
   sfx: { open: () => void; close: () => void; click: () => void; success: () => void; error: () => void }
 }
@@ -21,6 +21,7 @@ export class LessonModal {
 
   constructor(
     private root: HTMLElement,
+    private rt: CourseRuntime,
     private deps: LessonModalDeps,
   ) {}
 
@@ -31,8 +32,9 @@ export class LessonModal {
   open(step: number): void {
     if (this.overlay) this.destroy()
     const { lang, t } = this.deps
-    const lesson = lessonOf(step)
-    const level = LEVELS[levelOfStep(step)]
+    const lesson = this.rt.lessonOf(step)
+    const levelIdx = this.rt.levelOfStep(step)
+    const level = this.rt.course.levels[levelIdx]
     const review = this.deps.isCompleted(step)
     const L = lang()
 
@@ -43,8 +45,12 @@ export class LessonModal {
     /* header */
     const header = el('header', 'lesson-header')
     const chipRow = el('div', 'lesson-chips')
-    chipRow.appendChild(el('span', 'chip chip-step', `${esc(t('step'))} ${String(step).padStart(2, '0')} <span class="chip-dim">${esc(t('stepOf'))}</span>`))
-    chipRow.appendChild(el('span', 'chip chip-level', `${esc(t('levelLabel'))} ${levelOfStep(step) + 1} · ${esc(tr(level.name, L)).toUpperCase()}`))
+    chipRow.appendChild(
+      el('span', 'chip chip-step', `${esc(t('step'))} ${String(step).padStart(2, '0')} <span class="chip-dim">/ ${this.rt.stepCount}</span>`),
+    )
+    chipRow.appendChild(
+      el('span', 'chip chip-level', `${esc(t('levelLabel'))} ${levelIdx + 1} · ${esc(tr(level.name, L)).toUpperCase()}`),
+    )
     if (review) chipRow.appendChild(el('span', 'chip chip-done', '✓ ' + esc(t('completed'))))
     header.appendChild(chipRow)
 
@@ -81,6 +87,7 @@ export class LessonModal {
     const challengeWrap = el('section', 'lesson-challenge')
     challengeWrap.appendChild(el('h3', 'challenge-heading', esc(t('challenge'))))
     let passed = review
+    let mistakes = 0
 
     const footer = el('footer', 'lesson-footer')
     const action = el('div', 'lesson-action')
@@ -91,14 +98,17 @@ export class LessonModal {
     completeBtn.disabled = !passed
     completeBtn.addEventListener('click', () => {
       if (!passed) return
-      if (!review) this.deps.onComplete(step)
+      if (!review) this.deps.onComplete(step, mistakes === 0)
       this.close(!review)
     })
 
     const cbs: ChallengeCallbacks = {
       t,
       onClick: () => this.deps.sfx.click(),
-      onWrong: () => this.deps.sfx.error(),
+      onWrong: () => {
+        mistakes++
+        this.deps.sfx.error()
+      },
       onPass: () => {
         this.deps.sfx.success()
         passed = true

@@ -4,16 +4,9 @@ import { Engine } from './core/engine'
 import { Input } from './core/input'
 import { AudioEngine } from './core/audio'
 import { GameState } from './game/state'
-import {
-  islandPosition,
-  levelOfStep,
-  STEP_COUNT,
-  SUMMIT_POS,
-  tr,
-  ZONE_CENTERS,
-  ZONES,
-} from './game/constants'
-import { lessonOf } from './content/lessons'
+import { CourseRuntime } from './game/runtime'
+import { getCourse } from './content/courses'
+import { tr } from './game/constants'
 import { makeT } from './content/i18n'
 import { World } from './world/world'
 import { Robot } from './player/robot'
@@ -24,13 +17,24 @@ import { LessonModal } from './ui/lesson'
 import { Screens } from './ui/screens'
 
 /* ------------------------------------------------------------------ */
-/* bootstrap                                                           */
+/* bootstrap — resolve the course, build its world                     */
 /* ------------------------------------------------------------------ */
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement
 const uiRoot = document.getElementById('ui') as HTMLElement
 
-const state = new GameState()
+const urlCourse = new URLSearchParams(location.search).get('course')
+const preSave = (() => {
+  try {
+    return JSON.parse(localStorage.getItem('next-step-ascent-v2') ?? '{}') as { activeCourse?: string }
+  } catch {
+    return {}
+  }
+})()
+const course = getCourse(urlCourse ?? preSave.activeCourse)
+const rt = new CourseRuntime(course)
+
+const state = new GameState(course)
 const t = makeT(() => state.lang)
 const engine = new Engine(canvas)
 const audio = new AudioEngine()
@@ -38,17 +42,18 @@ const input = new Input(canvas, uiRoot)
 
 const world = new World(
   engine.scene,
+  rt,
   (step) => state.isCompleted(step),
   (id) => state.hasSpark(id),
 )
 
 const robot = new Robot()
 engine.scene.add(robot.group)
-const player = new PlayerController()
+const player = new PlayerController(rt.islandPosition(0))
 player.snapToGround(world.walkables)
 
 // face the first station on spawn
-const toFirst = islandPosition(1).clone().sub(islandPosition(0)).setY(0).normalize()
+const toFirst = rt.islandPosition(1).clone().sub(rt.islandPosition(0)).setY(0).normalize()
 const cam = new ChaseCamera(engine.camera, Math.atan2(-toFirst.x, -toFirst.z))
 
 /* fade layer for respawns */
@@ -65,11 +70,27 @@ uiRoot.appendChild(vignette)
 
 let playing = false
 
-const lessonModal = new LessonModal(uiRoot, {
+function enterCourse(courseId: string): void {
+  if (courseId === course.id) {
+    screens.closeCurrent(true)
+    if (!playing) {
+      startPlaying()
+    } else {
+      syncInput()
+    }
+    return
+  }
+  state.save.activeCourse = courseId
+  const url = new URL(location.href)
+  url.searchParams.set('course', courseId)
+  location.href = url.toString()
+}
+
+const lessonModal = new LessonModal(uiRoot, rt, {
   lang: () => state.lang,
   t,
   isCompleted: (s) => state.isCompleted(s),
-  onComplete: (s) => finishStep(s),
+  onComplete: (s, perfect) => state.completeStep(s, perfect),
   onClose: () => syncInput(),
   sfx: {
     open: () => audio.open(),
@@ -80,13 +101,21 @@ const lessonModal = new LessonModal(uiRoot, {
   },
 })
 
-const screens = new Screens(uiRoot, {
+const screens = new Screens(uiRoot, rt, {
   lang: () => state.lang,
   t,
   isCompleted: (s) => state.isCompleted(s),
-  completedCount: () => state.save.completed.length,
-  sparkCount: () => state.save.sparks.length,
+  completedCount: () => state.progress.completed.length,
+  courseProgress: (id) => {
+    const c = getCourse(id)
+    return { completed: state.progressOf(id).completed.length, total: c.lessons.length }
+  },
+  sparkCount: () => state.progress.sparks.length,
   sparkTotal: () => world.sparks.total,
+  xp: () => state.save.xp,
+  rank: () => state.rank,
+  playerName: () => state.save.playerName,
+  setPlayerName: (n) => state.setPlayerName(n),
   soundOn: () => state.save.sound,
   quality: () => state.save.quality,
   setLang: (l) => state.setLang(l),
@@ -97,14 +126,20 @@ const screens = new Screens(uiRoot, {
     lessonModal.open(s)
     syncInput()
   },
+  onEnterCourse: enterCourse,
   sfx: { click: () => audio.click(), open: () => audio.open(), close: () => audio.closeUi() },
+  toast: (m) => hud.toast(m),
 })
 
-const hud = new Hud(uiRoot, {
+const hud = new Hud(uiRoot, rt, {
   lang: () => state.lang,
   t,
   isCompleted: (s) => state.isCompleted(s),
   nextStep: () => state.nextStep,
+  onOpenWorlds: () => {
+    screens.showWorlds()
+    syncInput()
+  },
   onOpenJournal: () => {
     screens.showJournal()
     syncInput()
@@ -121,7 +156,7 @@ const hud = new Hud(uiRoot, {
   },
   onInteract: () => tryInteract(),
 })
-hud.setSparks(state.save.sparks.length, world.sparks.total)
+hud.setSparks(state.progress.sparks.length, world.sparks.total)
 
 function syncInput(): void {
   const uiOpen = lessonModal.isOpen || screens.isOpen || cinematic !== null || !playing
@@ -135,41 +170,43 @@ function syncInput(): void {
 
 function refreshStations(): void {
   for (const st of world.stations) {
-    const lesson = lessonOf(st.step)
+    const lesson = rt.lessonOf(st.step)
     const status = state.isCompleted(st.step) ? 'done' : st.step === state.nextStep ? 'next' : 'locked'
     st.setStatus(status, tr(lesson.to, state.lang))
   }
 }
 refreshStations()
 
-function finishStep(step: number): void {
-  state.completeStep(step)
-}
-
-state.on('step-completed', (step) => {
+state.on('step-completed', (step, perfect) => {
   const station = world.stationOf(step)
-  const accent = ZONES[levelOfStep(step)].accent.getHex()
+  const accent = rt.zoneOfStep(step).accent.getHex()
   world.particles.spawn(station.worldPos.clone().add(new THREE.Vector3(0, 3.2, 0)), accent, 42, 7, -5, 1.4, 0.7)
   world.particles.spawn(station.worldPos.clone().add(new THREE.Vector3(0, 3.2, 0)), 0xffd66b, 24, 4, -3, 1.8, 0.5)
   audio.complete()
   refreshStations()
   hud.refresh()
 
-  if (step < STEP_COUNT) {
+  if (step < rt.stepCount) {
     world.openBridgeAfter(step, true)
-    hud.toast(t('stepDone'))
+    hud.toast((perfect ? `${t('perfectClear')} ` : '') + t('stepDone'))
     setTimeout(() => hud.toast(t('bridgeOpen')), 1400)
-  } else {
-    // summit!
-    world.beacon.ignite()
-    world.particles.spawn(SUMMIT_POS.clone(), 0xffd66b, 90, 12, -3, 2.6, 1.0)
-    world.particles.spawn(SUMMIT_POS.clone(), 0xffffff, 40, 8, -2, 2.2, 0.7)
-    audio.fanfare()
-    setTimeout(() => {
-      screens.showCompletion(() => syncInput())
-      syncInput()
-    }, 2000)
   }
+})
+
+state.on('course-completed', () => {
+  world.beacon.ignite()
+  world.particles.spawn(rt.summitPos.clone(), 0xffd66b, 90, 12, -3, 2.6, 1.0)
+  world.particles.spawn(rt.summitPos.clone(), 0xffffff, 40, 8, -2, 2.2, 0.7)
+  audio.fanfare()
+  setTimeout(() => {
+    screens.showCompletion(() => syncInput())
+    syncInput()
+  }, 2000)
+})
+
+state.on('xp-changed', (_xp, gained, rankUp) => {
+  if (gained >= 50) hud.toast(`⚡ +${gained} XP`)
+  if (rankUp) setTimeout(() => hud.toast(`${rankUp.icon} ${t('rankUp')} ${tr(rankUp.name, state.lang)}`), 900)
 })
 
 state.on('spark-collected', (_id, total) => {
@@ -183,7 +220,11 @@ state.on('lang-changed', () => {
 
 state.on('sound-changed', (on) => audio.setEnabled(on))
 state.on('quality-changed', (q) => engine.setQuality(q))
-state.on('reset', () => location.reload())
+state.on('reset', () => {
+  const url = new URL(location.href)
+  url.searchParams.delete('course')
+  location.href = url.toString()
+})
 
 player.onFall = () => {
   fade.classList.add('flash')
@@ -248,7 +289,8 @@ function updateCinematic(dt: number): void {
   cinematic.t += dt
   const k = THREE.MathUtils.smootherstep(Math.min(cinematic.t / cinematic.dur, 1), 0, 1)
   const end = chaseDesired()
-  const p0 = new THREE.Vector3(SUMMIT_POS.x + 30, SUMMIT_POS.y + 6, SUMMIT_POS.z + 30)
+  const summit = rt.summitPos
+  const p0 = new THREE.Vector3(summit.x + 30, summit.y + 6, summit.z + 30)
   const mid = p0.clone().lerp(end.pos, 0.5)
   mid.y += 18
   const outward = mid.clone().setY(0)
@@ -257,7 +299,7 @@ function updateCinematic(dt: number): void {
   const a = p0.clone().lerp(mid, k)
   const b = mid.clone().lerp(end.pos, k)
   const pos = a.lerp(b, k)
-  const look = SUMMIT_POS.clone().lerp(end.look, k)
+  const look = summit.clone().lerp(end.look, k)
   cam.setImmediate(pos, look)
   if (cinematic.t >= cinematic.dur) {
     cinematic = null
@@ -266,7 +308,7 @@ function updateCinematic(dt: number): void {
 }
 
 const skipCinematic = () => {
-  if (cinematic && cinematic.t > 0.5) cinematic.t = cinematic.dur
+  if (cinematic && cinematic.t > 0.15) cinematic.t = cinematic.dur
 }
 window.addEventListener('pointerdown', skipCinematic)
 window.addEventListener('keydown', skipCinematic)
@@ -307,12 +349,8 @@ engine.onFrame((dt, time) => {
 
   /* world + audio */
   world.update(dt, time, player.position, engine.camera.position)
-  const zoneIdx = ZONE_CENTERS.reduce(
-    (best, c, i) => (Math.abs(player.position.y - c) < Math.abs(player.position.y - ZONE_CENTERS[best]) ? i : best),
-    0,
-  )
-  audio.update(zoneIdx)
-  robot.setAntennaColor(ZONES[levelOfStep(Math.min(state.nextStep, STEP_COUNT))].accent)
+  audio.update(Math.min(rt.zoneIndexAt(player.position.y), 3))
+  robot.setAntennaColor(rt.zoneOfStep(Math.min(state.nextStep, rt.stepCount)).accent)
 
   /* sparks */
   sparkComboTimer -= dt
@@ -357,7 +395,7 @@ function updateEdgeArrow(): void {
     hud.hideEdgeArrow()
     return
   }
-  const target = state.allDone ? SUMMIT_POS : world.stationOf(state.nextStep).worldPos
+  const target = state.allDone ? rt.summitPos : world.stationOf(state.nextStep).worldPos
   if (target.distanceTo(player.position) < 14) {
     hud.hideEdgeArrow()
     return
@@ -375,7 +413,6 @@ function updateEdgeArrow(): void {
     hud.hideEdgeArrow()
     return
   }
-  // clamp to screen edge, keep direction
   const angle = Math.atan2(ny, nx)
   const ex = Math.cos(angle)
   const ey = Math.sin(angle)
@@ -389,14 +426,16 @@ function updateEdgeArrow(): void {
 /* start                                                               */
 /* ------------------------------------------------------------------ */
 
-const hasProgress = state.save.completed.length > 0 || state.save.seenIntro
-screens.showIntro(hasProgress, () => {
+function startPlaying(): void {
   audio.init()
   audio.setEnabled(state.save.sound)
   state.markIntroSeen()
   playing = true
   startCinematic()
-})
+}
+
+const hasProgress = state.progress.completed.length > 0 || state.save.seenIntro
+screens.showIntro(hasProgress, startPlaying)
 syncInput()
 engine.setQuality(state.save.quality)
 engine.start()
@@ -406,24 +445,35 @@ declare global {
   interface Window {
     __game?: {
       state: GameState
+      courseId: string
       teleport: (step: number) => void
       openLesson: (step: number) => void
       completeStep: (step: number) => void
+      openWorlds: () => void
       skipIntro: () => void
+      cinematicActive: () => boolean
     }
   }
 }
 window.__game = {
   state,
+  courseId: course.id,
+  cinematicActive: () => cinematic !== null,
   teleport: (step: number) => {
-    const pos = step === 0 ? islandPosition(0) : world.stationOf(step).worldPos.clone()
+    cinematic = null
+    syncInput()
+    const pos = step === 0 ? rt.islandPosition(0) : world.stationOf(step).worldPos.clone()
     player.teleport(pos.clone().add(new THREE.Vector3(2, 2, 0)), world.walkables)
   },
   openLesson: (step: number) => {
     lessonModal.open(step)
     syncInput()
   },
-  completeStep: (step: number) => finishStep(step),
+  completeStep: (step: number) => state.completeStep(step, false),
+  openWorlds: () => {
+    screens.showWorlds()
+    syncInput()
+  },
   skipIntro: () => {
     screens.closeCurrent(true)
     playing = true

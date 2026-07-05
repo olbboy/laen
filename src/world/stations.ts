@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { islandPosition, zoneOfStep } from '../game/constants'
+import type { CourseRuntime } from '../game/runtime'
 import { labelTexture, pillarTexture, radialTexture } from './textures'
 
 export type StationStatus = 'locked' | 'next' | 'done'
@@ -28,11 +28,14 @@ export class Station {
   private label: THREE.Sprite
   private accent: THREE.Color
 
-  constructor(readonly step: number) {
-    const zone = zoneOfStep(step)
+  constructor(
+    readonly step: number,
+    rt: CourseRuntime,
+  ) {
+    const zone = rt.zoneOfStep(step)
     this.accent = zone.accent.clone()
 
-    const islandC = islandPosition(step)
+    const islandC = rt.islandPosition(step)
     // place the monument off-center, toward the world center (inner rim)
     const inward = islandC.clone().setY(0).normalize().multiplyScalar(-3.4)
     this.group.position.set(islandC.x + inward.x, islandC.y, islandC.z + inward.z)

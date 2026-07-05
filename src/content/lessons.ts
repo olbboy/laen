@@ -1,50 +1,10 @@
-import type { L } from '../game/constants'
+import type { Lesson } from './types'
 
 /* ------------------------------------------------------------------ */
-/* Challenge specs — five interactive engines, all data-driven         */
+/* The 11 lessons of the AI mastery ladder                             */
 /* ------------------------------------------------------------------ */
 
-export interface QuizOption {
-  text: L
-  correct?: boolean
-  feedback: L
-}
-export interface MultiOption {
-  text: L
-  good: boolean
-  feedback: L
-}
-export interface MatchPair {
-  left: L
-  right: L
-}
-
-export type ChallengeSpec =
-  | { kind: 'quiz'; prompt: L; options: QuizOption[] }
-  | { kind: 'multi'; prompt: L; options: MultiOption[] }
-  | { kind: 'match'; prompt: L; pairs: MatchPair[] }
-  | { kind: 'order'; prompt: L; items: L[] }
-  | { kind: 'terminal'; prompt: L; placeholder: string; pattern: string; hint: L; success: L }
-
-export interface Lesson {
-  step: number
-  icon: string
-  from: L
-  to: L
-  title: L
-  tagline: L
-  hook: L
-  body: L[]
-  example?: { label: L; code: string }
-  challenge: ChallengeSpec
-  action: L
-}
-
-/* ------------------------------------------------------------------ */
-/* The 11 lessons of the ladder                                        */
-/* ------------------------------------------------------------------ */
-
-export const LESSONS: Lesson[] = [
+export const AI_LADDER_LESSONS: Lesson[] = [
   /* ---------------------------------------------------- 01 · Codex */
   {
     step: 1,
@@ -731,9 +691,3 @@ export const LESSONS: Lesson[] = [
     },
   },
 ]
-
-export function lessonOf(step: number): Lesson {
-  const l = LESSONS.find((x) => x.step === step)
-  if (!l) throw new Error(`no lesson for step ${step}`)
-  return l
-}

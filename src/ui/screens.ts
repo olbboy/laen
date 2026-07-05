@@ -1,5 +1,8 @@
-import { LEVELS, levelOfStep, STEP_COUNT, tr, type Lang } from '../game/constants'
-import { LESSONS } from '../content/lessons'
+import { tr, type Lang } from '../game/constants'
+import type { Course, Rank } from '../content/types'
+import { COURSES } from '../content/courses'
+import type { CourseRuntime } from '../game/runtime'
+import { drawCertificate } from './certificate'
 import { el, esc } from './dom'
 
 export interface ScreensDeps {
@@ -7,8 +10,13 @@ export interface ScreensDeps {
   t: (key: string) => string
   isCompleted: (step: number) => boolean
   completedCount: () => number
+  courseProgress: (courseId: string) => { completed: number; total: number }
   sparkCount: () => number
   sparkTotal: () => number
+  xp: () => number
+  rank: () => Rank
+  playerName: () => string
+  setPlayerName: (name: string) => void
   soundOn: () => boolean
   quality: () => 'high' | 'low'
   setLang: (lang: Lang) => void
@@ -16,15 +24,18 @@ export interface ScreensDeps {
   setQuality: (q: 'high' | 'low') => void
   resetProgress: () => void
   onOpenLesson: (step: number) => void
+  onEnterCourse: (courseId: string) => void
   sfx: { click: () => void; open: () => void; close: () => void }
+  toast: (msg: string) => void
 }
 
-/** Intro, journal, settings and summit-completion overlays. */
+/** Intro, worlds hub, journal, settings and summit-completion overlays. */
 export class Screens {
   private current: HTMLElement | null = null
 
   constructor(
     private root: HTMLElement,
+    private rt: CourseRuntime,
     private deps: ScreensDeps,
   ) {}
 
@@ -52,13 +63,12 @@ export class Screens {
 
   showIntro(hasProgress: boolean, onStart: () => void): void {
     const { t, lang } = this.deps
+    const course = this.rt.course
     const overlay = el('div', 'overlay intro-overlay')
     const inner = el('div', 'intro-inner')
 
-    // floating decorative blobs
     for (let i = 0; i < 4; i++) inner.appendChild(el('div', `intro-blob blob-${i}`))
 
-    // language toggle
     const langRow = el('div', 'intro-lang')
     for (const l of ['en', 'vi'] as Lang[]) {
       const btn = el('button', 'lang-btn' + (lang() === l ? ' active' : ''), l.toUpperCase())
@@ -89,28 +99,35 @@ export class Screens {
     inner.appendChild(el('h1', 'intro-title', 'NEXT<span>STEP</span>'))
     inner.appendChild(el('p', 'intro-sub', esc(t('subtitle'))))
 
-    // the four levels as pills
-    const pills = el('div', 'intro-pills')
-    LEVELS.forEach((lv, i) => {
-      pills.appendChild(
-        el('span', 'intro-pill', `<i style="background:${lv.color}"></i>${i + 1} · ${esc(tr(lv.name, lang()))}`),
-      )
-    })
-    inner.appendChild(pills)
+    // current world card-line
+    inner.appendChild(
+      el(
+        'p',
+        'intro-course',
+        `${course.icon} <b>${esc(tr(course.name, lang()))}</b> · ${course.lessons.length} ${esc(t('stepsWord'))} · ~${course.minutes} ${esc(t('minutesWord'))}`,
+      ),
+    )
 
-    // progress note when returning
     if (hasProgress) {
       const done = this.deps.completedCount()
-      inner.appendChild(el('p', 'intro-progress', `${esc(t('welcomeBack'))} — ${done}/${STEP_COUNT}`))
+      inner.appendChild(el('p', 'intro-progress', `${esc(t('welcomeBack'))} — ${done}/${this.rt.stepCount}`))
     }
 
+    const btnRow = el('div', 'intro-actions')
     const start = el('button', 'btn btn-primary btn-big', esc(hasProgress ? t('continue') : t('begin')))
     start.addEventListener('click', () => {
       this.deps.sfx.click()
       this.closeCurrent(true)
       onStart()
     })
-    inner.appendChild(start)
+    btnRow.appendChild(start)
+    const worlds = el('button', 'btn btn-big', `🌍 ${esc(t('chooseWorldBtn'))}`)
+    worlds.addEventListener('click', () => {
+      this.deps.sfx.click()
+      this.showWorlds(() => this.showIntro(hasProgress, onStart))
+    })
+    btnRow.appendChild(worlds)
+    inner.appendChild(btnRow)
 
     const hints = el('div', 'intro-hints')
     hints.innerHTML = `
@@ -125,6 +142,100 @@ export class Screens {
     this.show(overlay)
   }
 
+  /* -------------------------- worlds hub -------------------------- */
+
+  showWorlds(onDismiss?: () => void): void {
+    const { t, lang } = this.deps
+    const L = lang()
+    const overlay = el('div', 'overlay panel-overlay worlds-overlay')
+    const card = el('div', 'card panel-card worlds-card')
+
+    const header = el('header', 'panel-header worlds-header')
+    const titleWrap = el('div', 'worlds-title-wrap')
+    titleWrap.appendChild(el('h2', 'panel-title', esc(t('chooseWorld'))))
+    const rank = this.deps.rank()
+    titleWrap.appendChild(
+      el('div', 'worlds-rank', `${rank.icon} <b>${esc(tr(rank.name, L))}</b> · ⚡ ${this.deps.xp()} XP`),
+    )
+    header.appendChild(titleWrap)
+    const close = el('button', 'icon-btn', '✕')
+    close.addEventListener('click', () => {
+      this.closeCurrent()
+      onDismiss?.()
+    })
+    header.appendChild(close)
+    card.appendChild(header)
+
+    const grid = el('div', 'worlds-grid')
+    for (const course of COURSES) {
+      grid.appendChild(this.worldCard(course, L))
+    }
+    card.appendChild(grid)
+    card.appendChild(el('p', 'worlds-footer', esc(t('moreWorlds'))))
+
+    overlay.appendChild(card)
+    overlay.addEventListener('pointerdown', (e) => {
+      if (e.target === overlay) {
+        this.closeCurrent()
+        onDismiss?.()
+      }
+    })
+    this.show(overlay)
+    this.deps.sfx.open()
+  }
+
+  private worldCard(course: Course, L: Lang): HTMLElement {
+    const { t } = this.deps
+    const prog = this.deps.courseProgress(course.id)
+    const isActive = course.id === this.rt.course.id
+    const complete = prog.completed >= prog.total
+
+    const cardEl = el('div', 'world-card' + (isActive ? ' active' : ''))
+    cardEl.style.setProperty('--accent', course.zones[0].accent)
+
+    // themed sky banner
+    const banner = el('div', 'world-banner')
+    const zs = course.zones
+    banner.style.background = `linear-gradient(160deg, ${zs[zs.length - 1].skyTop} 0%, ${zs[0].skyTop} 55%, ${zs[0].skyBottom} 100%)`
+    banner.appendChild(el('span', 'world-icon', course.icon))
+    // mini island silhouettes
+    for (let i = 0; i < 3; i++) banner.appendChild(el('i', `world-isle isle-${i}`))
+    cardEl.appendChild(banner)
+
+    const info = el('div', 'world-info')
+    info.appendChild(el('h3', 'world-name', esc(tr(course.name, L))))
+    info.appendChild(el('p', 'world-tagline', esc(tr(course.tagline, L))))
+    info.appendChild(
+      el('p', 'world-meta', `${course.lessons.length} ${esc(t('stepsWord'))} · ~${course.minutes} ${esc(t('minutesWord'))}`),
+    )
+
+    const bar = el('div', 'world-progress')
+    const fill = el('div', 'world-progress-fill')
+    fill.style.width = `${(prog.completed / prog.total) * 100}%`
+    bar.appendChild(fill)
+    info.appendChild(bar)
+    info.appendChild(
+      el(
+        'p',
+        'world-progress-label',
+        complete ? `★ ${esc(t('worldComplete'))}` : `${prog.completed}/${prog.total}`,
+      ),
+    )
+
+    const enter = el(
+      'button',
+      'btn btn-primary world-enter',
+      esc(complete ? t('replayWorld') : prog.completed > 0 ? t('continueWorld') : t('enterWorld')),
+    )
+    enter.addEventListener('click', () => {
+      this.deps.sfx.click()
+      this.deps.onEnterCourse(course.id)
+    })
+    info.appendChild(enter)
+    cardEl.appendChild(info)
+    return cardEl
+  }
+
   /* --------------------------- journal --------------------------- */
 
   showJournal(): void {
@@ -135,11 +246,10 @@ export class Screens {
 
     const list = el('div', 'journal-list')
     let any = false
-    for (const lesson of LESSONS) {
+    for (const lesson of this.rt.course.lessons) {
       const done = this.deps.isCompleted(lesson.step)
-      const level = LEVELS[levelOfStep(lesson.step)]
       const row = el('button', 'journal-row' + (done ? ' done' : ' locked'))
-      row.style.setProperty('--accent', level.color)
+      row.style.setProperty('--accent', this.rt.levelColorOfStep(lesson.step))
       row.appendChild(el('span', 'journal-num', done ? '✓' : String(lesson.step).padStart(2, '0')))
       const info = el('span', 'journal-info')
       info.appendChild(el('span', 'journal-title', esc(done ? tr(lesson.title, lang()) : '· · ·')))
@@ -228,45 +338,115 @@ export class Screens {
 
   showCompletion(onKeepExploring: () => void): void {
     const { t, lang } = this.deps
+    const course = this.rt.course
     const overlay = el('div', 'overlay completion-overlay')
-    const card = el('div', 'card completion-card')
 
+    // celebratory confetti
+    const confetti = el('div', 'confetti')
+    const colors = course.levels.map((l) => l.color).concat('#f0b429')
+    for (let i = 0; i < 36; i++) {
+      const piece = el('i', 'confetti-piece')
+      piece.style.left = `${Math.random() * 100}%`
+      piece.style.background = colors[i % colors.length]
+      piece.style.animationDelay = `${Math.random() * 2.4}s`
+      piece.style.animationDuration = `${2.6 + Math.random() * 2}s`
+      confetti.appendChild(piece)
+    }
+    overlay.appendChild(confetti)
+
+    const card = el('div', 'card completion-card')
     card.appendChild(el('div', 'completion-star', '★'))
     card.appendChild(el('h2', 'completion-title', esc(t('summitTitle'))))
+    const rank = this.deps.rank()
     card.appendChild(
       el(
         'p',
         'completion-stats',
-        `${STEP_COUNT}/${STEP_COUNT} · ✦ ${this.deps.sparkCount()}/${this.deps.sparkTotal()} ${esc(t('sparks'))}`,
+        `${course.icon} ${esc(tr(course.name, lang()))} · ✦ ${this.deps.sparkCount()}/${this.deps.sparkTotal()} · ${rank.icon} ${esc(tr(rank.name, lang()))} · ⚡ ${this.deps.xp()} XP`,
       ),
     )
     card.appendChild(el('p', 'completion-sub', esc(t('summitSub'))))
 
     const grid = el('div', 'completion-grid')
-    for (const lesson of LESSONS) {
-      const level = LEVELS[levelOfStep(lesson.step)]
+    for (const lesson of course.lessons) {
       const item = el('div', 'completion-item')
-      item.style.setProperty('--accent', level.color)
+      item.style.setProperty('--accent', this.rt.levelColorOfStep(lesson.step))
       item.appendChild(el('span', 'completion-item-icon', lesson.icon))
       item.appendChild(el('span', 'completion-item-text', esc(tr(lesson.title, lang()))))
       grid.appendChild(item)
     }
     card.appendChild(grid)
 
+    /* certificate block */
+    const certBlock = el('div', 'cert-block')
+    const nameRow = el('div', 'cert-name-row')
+    nameRow.appendChild(el('label', 'cert-name-label', esc(t('yourName'))))
+    const nameInput = document.createElement('input')
+    nameInput.className = 'cert-name-input'
+    nameInput.type = 'text'
+    nameInput.maxLength = 40
+    nameInput.placeholder = t('namePlaceholder')
+    nameInput.value = this.deps.playerName()
+    nameInput.addEventListener('keydown', (e) => e.stopPropagation())
+    nameRow.appendChild(nameInput)
+    certBlock.appendChild(nameRow)
+
+    const certActions = el('div', 'completion-actions')
+    const download = el('button', 'btn btn-primary', '📜 ' + esc(t('downloadCert')))
+    download.addEventListener('click', () => {
+      this.deps.sfx.click()
+      this.deps.setPlayerName(nameInput.value)
+      const canvas = drawCertificate(course, lang(), {
+        playerName: nameInput.value,
+        sparks: this.deps.sparkCount(),
+        sparkTotal: this.deps.sparkTotal(),
+        xp: this.deps.xp(),
+        rank: this.deps.rank(),
+        date: new Date(),
+      }, t)
+      const a = document.createElement('a')
+      a.download = `next-step-${course.id}-certificate.png`
+      a.href = canvas.toDataURL('image/png')
+      a.click()
+    })
+    certActions.appendChild(download)
+
+    const share = el('button', 'btn', '🔗 ' + esc(t('shareCert')))
+    share.addEventListener('click', async () => {
+      this.deps.sfx.click()
+      const text = t('shareText')
+        .replace('{course}', tr(course.name, lang()))
+        .replace('{steps}', String(course.lessons.length))
+        .replace('{xp}', String(this.deps.xp()))
+      try {
+        if (navigator.share) {
+          await navigator.share({ text })
+        } else {
+          await navigator.clipboard.writeText(text)
+          this.deps.toast(t('copiedShare'))
+        }
+      } catch {
+        /* user cancelled */
+      }
+    })
+    certActions.appendChild(share)
+    certBlock.appendChild(certActions)
+    card.appendChild(certBlock)
+
     const row = el('div', 'completion-actions')
-    const explore = el('button', 'btn btn-primary', esc(t('keepExploring')))
+    const explore = el('button', 'btn', esc(t('keepExploring')))
     explore.addEventListener('click', () => {
       this.deps.sfx.click()
       this.closeCurrent(true)
       onKeepExploring()
     })
-    const journal = el('button', 'btn', esc(t('reviewJournal')))
-    journal.addEventListener('click', () => {
+    const worlds = el('button', 'btn btn-primary', '🌍 ' + esc(t('otherWorlds')))
+    worlds.addEventListener('click', () => {
       this.deps.sfx.click()
-      this.showJournal()
+      this.showWorlds()
     })
+    row.appendChild(worlds)
     row.appendChild(explore)
-    row.appendChild(journal)
     card.appendChild(row)
 
     overlay.appendChild(card)

@@ -1379,6 +1379,241 @@ button {
   flex-wrap: wrap;
 }
 
+/* ------------------------------ worlds ---------------------------- */
+
+.hud-world-chip {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink);
+  background: rgba(255, 253, 248, 0.85);
+  border: 1.5px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(8px);
+  transition: transform 0.15s ease;
+}
+.hud-world-chip:hover {
+  transform: translateY(-1px);
+}
+
+.worlds-card {
+  width: min(880px, 100%);
+  padding-bottom: 8px;
+}
+.worlds-header {
+  align-items: flex-start;
+}
+.worlds-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.worlds-rank {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.worlds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  padding: 18px 22px 8px;
+  overflow-y: auto;
+}
+.world-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.world-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 34px -10px rgba(35, 40, 56, 0.3);
+}
+.world-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.world-banner {
+  position: relative;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.world-icon {
+  font-size: 40px;
+  filter: drop-shadow(0 6px 14px rgba(20, 16, 32, 0.35));
+  z-index: 1;
+}
+.world-isle {
+  position: absolute;
+  background: rgba(35, 40, 56, 0.28);
+  border-radius: 50% 50% 60% 60%;
+}
+.isle-0 {
+  width: 70px;
+  height: 22px;
+  left: 8%;
+  bottom: 12px;
+}
+.isle-1 {
+  width: 44px;
+  height: 15px;
+  right: 12%;
+  bottom: 30px;
+}
+.isle-2 {
+  width: 30px;
+  height: 11px;
+  right: 30%;
+  bottom: 8px;
+}
+.world-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px 16px;
+  flex: 1;
+}
+.world-name {
+  font-size: 16.5px;
+  font-weight: 900;
+}
+.world-tagline {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  line-height: 1.45;
+  flex: 1;
+}
+.world-meta {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.world-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.world-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+.world-progress-label {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+.world-enter {
+  margin-top: 6px;
+  justify-content: center;
+}
+.worlds-footer {
+  padding: 12px 24px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+.intro-course {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.intro-course b {
+  color: var(--ink);
+}
+.intro-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* --------------------------- certificate -------------------------- */
+
+.cert-block {
+  margin: 4px 0 18px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  border: 1.5px dashed var(--gold);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cert-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.cert-name-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+.cert-name-input {
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--cream);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+  outline: none;
+  min-width: 210px;
+  text-align: center;
+}
+.cert-name-input:focus {
+  border-color: var(--gold);
+}
+
+/* confetti */
+.confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.confetti-piece {
+  position: absolute;
+  top: -14px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  animation: confetti-fall linear infinite;
+}
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-20px) rotate(0deg) rotateY(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(105vh) rotate(540deg) rotateY(360deg);
+    opacity: 0.7;
+  }
+}
+
 /* ---------------------------- responsive -------------------------- */
 
 @media (max-width: 720px) {

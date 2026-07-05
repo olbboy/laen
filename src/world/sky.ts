@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import { zoneBlendAt, mulberry32 } from '../game/constants'
+import { mulberry32 } from '../game/constants'
+import type { CourseRuntime } from '../game/runtime'
 
 export class Sky {
   readonly group = new THREE.Group()
@@ -8,10 +9,10 @@ export class Sky {
   private starMat: THREE.PointsMaterial
   private clouds: THREE.Group
 
-  constructor() {
+  constructor(private rt: CourseRuntime) {
     this.uniforms = {
-      topColor: { value: new THREE.Color(0x6fb3e8) },
-      bottomColor: { value: new THREE.Color(0xf6ead6) },
+      topColor: { value: rt.zones[0].skyTop.clone() },
+      bottomColor: { value: rt.zones[0].skyBottom.clone() },
     }
     const skyMat = new THREE.ShaderMaterial({
       uniforms: this.uniforms as unknown as { [k: string]: THREE.IUniform },
@@ -91,7 +92,7 @@ export class Sky {
 
   /** Blend palette to the camera's altitude; returns colors others need. */
   update(dt: number, cameraY: number, cameraPos: THREE.Vector3): { fog: THREE.Color; sun: THREE.Color; grassA: THREE.Color } {
-    const { a, b, t } = zoneBlendAt(cameraY)
+    const { a, b, t } = this.rt.zoneBlendAt(cameraY)
     this.uniforms.topColor.value.copy(a.skyTop).lerp(b.skyTop, t)
     this.uniforms.bottomColor.value.copy(a.skyBottom).lerp(b.skyBottom, t)
     this.starMat.opacity = THREE.MathUtils.lerp(a.starAlpha, b.starAlpha, t) * 0.9

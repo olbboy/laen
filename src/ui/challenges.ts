@@ -1,4 +1,4 @@
-import type { ChallengeSpec } from '../content/lessons'
+import type { ChallengeSpec } from '../content/types'
 import { tr, type Lang } from '../game/constants'
 import { el, esc, shuffled } from './dom'
 
@@ -271,7 +271,7 @@ function renderTerminal(
   row.appendChild(runBtn)
   root.appendChild(row)
 
-  const re = new RegExp(spec.pattern)
+  const re = new RegExp(spec.pattern, 'i')
   let solved = false
 
   const submit = () => {
